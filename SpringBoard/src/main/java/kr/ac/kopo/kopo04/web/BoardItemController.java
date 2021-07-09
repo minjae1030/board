@@ -7,19 +7,23 @@ import java.util.Optional;
 import javax.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
 
 import kr.ac.kopo.kopo04.domain.Board;
 import kr.ac.kopo.kopo04.domain.BoardItem;
+import kr.ac.kopo.kopo04.paging.Criteria;
 import kr.ac.kopo.kopo04.repository.BoardItemRepository;
 import kr.ac.kopo.kopo04.repository.BoardRepository;
 import kr.ac.kopo.kopo04.service.BoardItemService;
+
 
 @Controller
 public class BoardItemController {
@@ -32,20 +36,30 @@ public class BoardItemController {
 	BoardItemService boardItemService;
 	
 	@RequestMapping(value="/boardItem/{id}", method=RequestMethod.GET)
-	public String selectBoardItem(@PathVariable(name = "id") Long boardId, Model model) {
+	public String selectBoardItem(@PathVariable(name = "id") Long boardId, Model model,
+								  @PageableDefault (size = 10) Pageable pageable) {
 		
+		Page<BoardItem> boardItemPage = boardItemRepository.findAllByBoardIdAndParentIdIsNullOrderByIdDesc(boardId, pageable);
+		Long boardItemAllCnt = boardItemPage.getTotalElements();
+		Criteria criteria = new Criteria(boardItemPage);
 		Optional<Board> boardOptional = boardRepository.findById(boardId);
 		Board board = boardOptional.get();
-		List<BoardItem> boardItem = boardItemRepository.findAllByBoardIdAndParentIdIsNull(boardId);
-		model.addAttribute("boardItemList", boardItem);
+		//List<BoardItem> boardItem = boardItemRepository.findAllByBoardIdAndParentIdIsNull(boardId);
+		model.addAttribute("boardItemList", boardItemPage);
 		model.addAttribute("boardId",board.getId());
+		model.addAttribute("criteria", criteria);
+		model.addAttribute("totalCount", boardItemAllCnt);
+		model.addAttribute("board", board.getTitle());
 		return "boardItem";
 	}
 	
 	@RequestMapping(value="/boardItem/boardItemWrite/{boardId}", method= {RequestMethod.GET, RequestMethod.POST})
 	public String writeBoardItem(@PathVariable(name = "boardId") Long boardId, Model model) {
+		Optional<Board> boardOptional = boardRepository.findById(boardId);
+		Board board = boardOptional.get();
 		model.addAttribute("boardId", boardId);
 		model.addAttribute("date", boardItemService.getDate());
+		model.addAttribute("board", board.getTitle());
 		return "boardItemWrite";
 	}
 	
@@ -76,6 +90,7 @@ public class BoardItemController {
 		model.addAttribute("title", title);
 		model.addAttribute("content", content);
 		model.addAttribute("date", date);
+		model.addAttribute("board", board.getTitle());
 		return "boardItemInsertView";
 	}
 	
@@ -88,12 +103,15 @@ public class BoardItemController {
 		Optional<BoardItem> boardItemOptional = boardItemRepository.findById(id);
 		if (boardItemOptional.isPresent()) {
 			BoardItem boardItem = boardItemOptional.get();
+			Board board = boardItem.getBoard();
 			model.addAttribute("count", count);
 			model.addAttribute("boardId", boardId);
 			model.addAttribute("id", id);
 			model.addAttribute("title", boardItem.getTitle());
 			model.addAttribute("date", boardItem.getDate());
 			model.addAttribute("content", boardItem.getContent());
+			model.addAttribute("board", board.getTitle());
+			
 		}
 		
 		List<BoardItem> boardItemComment = boardItemRepository.findAllByParentIdAndBoardId(id,boardId);
@@ -109,12 +127,14 @@ public class BoardItemController {
 		Optional<BoardItem> boardItemOptional = boardItemRepository.findById(id);
 		if (boardItemOptional.isPresent()) {
 			BoardItem boardItem = boardItemOptional.get();
+			Board board = boardItem.getBoard();
 			model.addAttribute("count", count);
 			model.addAttribute("boardId", boardId);
 			model.addAttribute("id", id);
 			model.addAttribute("title", boardItem.getTitle());
 			model.addAttribute("date", boardItem.getDate());
 			model.addAttribute("content", boardItem.getContent());
+			model.addAttribute("board", board.getTitle());
 		}
 		
 		return "boardItemUpdate";
@@ -189,13 +209,25 @@ public class BoardItemController {
 	@RequestMapping(value = "/boardItem/boardItemSearched/{boardId}", method = {RequestMethod.GET, RequestMethod.POST})
 	public String boardItemSearched(@PathVariable(name = "boardId") Long boardId,
 									@RequestParam(name = "keyWord") String keyWord,
-									Model model) {
+									Model model,
+									@PageableDefault (size = 10) Pageable pageable) {
+		if (keyWord.isEmpty() || keyWord == "") {
+			boolean error = true;
+			model.addAttribute("error", error);
+			model.addAttribute("url", "boardItem/" + boardId);
+			return "boardItemSearched";
+		}
 		Optional<Board> boardOptional = boardRepository.findById(boardId);
 		Board board = boardOptional.get();
-		List<BoardItem> boardItemSearched = boardItemRepository.findAllByBoardIdAndParentIdIsNullAndTitleContainsOrBoardIdAndParentIdIsNullAndContentContains(boardId, keyWord, boardId, keyWord);
-		model.addAttribute("boardItemListSearched", boardItemSearched);
+		Page<BoardItem> boardItemPage = boardItemRepository.findAllByBoardIdAndParentIdIsNullAndTitleContainsOrBoardIdAndParentIdIsNullAndContentContains(boardId, keyWord, boardId, keyWord, pageable);
+		Long boardItemAllCnt = boardItemPage.getTotalElements();
+		Criteria criteria = new Criteria(boardItemPage);
+		//List<BoardItem> boardItemSearched = boardItemRepository.findAllByBoardIdAndParentIdIsNullAndTitleContainsOrBoardIdAndParentIdIsNullAndContentContains(boardId, keyWord, boardId, keyWord);
+		model.addAttribute("boardItemListSearched", boardItemPage);
 		model.addAttribute("boardId",board.getId());
-		
+		model.addAttribute("board",board.getTitle());
+		model.addAttribute("totalCount", boardItemAllCnt);
+		model.addAttribute("criteria", criteria);
 		return "boardItemSearched";
 	}
 	
